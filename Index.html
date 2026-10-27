@@ -120,7 +120,7 @@ footer{color:var(--muted);font-size:13px;text-align:center}
     </svg>
   </div>
   <div class="titles">
-    <div class="eyebrow">Radar Bluetooth</div>
+    <div class="eyebrow">Placa KBPro · serie 2736</div>
     <h1>Buscando a <input id="petName" aria-label="Nombre de la mascota" value="mi mascota" maxlength="20"></h1>
   </div>
 </header>
@@ -148,7 +148,7 @@ footer{color:var(--muted);font-size:13px;text-align:center}
 </main>
 
 <div class="controls">
-  <button class="primary" id="btnScan">Buscar la placa</button>
+  <button class="primary" id="btnScan">Buscar la placa 2736</button>
   <button id="btnReconnect" class="full" hidden>Volver a conectar</button>
   <button id="btnRing" disabled>Hacer sonar</button>
   <button id="btnCalib" disabled>Calibrar a 1 m</button>
@@ -157,10 +157,12 @@ footer{color:var(--muted);font-size:13px;text-align:center}
 </div>
 
 <section class="card">
-  <h2>Placa conectada</h2>
+  <h2>Tu placa</h2>
   <dl class="meta">
-    <dt>Nombre</dt><dd id="mName">—</dd>
-    <dt>ID</dt><dd id="mId">—</dd>
+    <dt>Nombre</dt><dd id="mName">KBPro_2736</dd>
+    <dt>MAC</dt><dd>BC:57:29:03:ED:71</dd>
+    <dt>iBeacon</dt><dd>Major 0 · Minor 2736</dd>
+    <dt>Estado</dt><dd id="mId">Sin conectar</dd>
     <dt>Batería</dt><dd id="mBat">—</dd>
     <dt>Modo</dt><dd id="mMode">—</dd>
   </dl>
@@ -192,12 +194,9 @@ footer{color:var(--muted);font-size:13px;text-align:center}
 <section class="card">
   <h2>Ayuda</h2>
   <details>
-    <summary>¿Cómo reconozco mi placa en la lista?</summary>
-    <ol>
-      <li>Pon la placa pegada al teléfono y aleja otros aparatos Bluetooth (audífonos, reloj).</li>
-      <li>Al pulsar «Buscar la placa», Chrome muestra los dispositivos cercanos. Puede aparecer con un nombre genérico (iTAG, Beacon, MiniBeacon) o como «Dispositivo desconocido».</li>
-      <li>Si dudas, abre la lista lejos de la placa y luego cerca: el que aparece al acercarte es el tuyo.</li>
-    </ol>
+    <summary>¿Por qué la lista solo muestra KBPro_2736?</summary>
+    <p>La app está configurada para tu placa: solo acepta el dispositivo llamado <code>KBPro_2736</code>, así no puedes elegir otro por error. Chrome no deja que una página web lea direcciones MAC, por eso la identifica por el nombre, que en tu placa es fijo.</p>
+    <p>Si la lista sale vacía, la placa está fuera de alcance, sin batería o el Bluetooth del teléfono está apagado. Esta placa emite cada 2 segundos, así que dale unos segundos.</p>
   </details>
   <details>
     <summary>No me muestra la distancia, solo «en alcance»</summary>
@@ -228,6 +227,7 @@ footer{color:var(--muted);font-size:13px;text-align:center}
 'use strict';
 const $ = id => document.getElementById(id);
 const bt = navigator.bluetooth;
+const TARGET = { name:'KBPro_2736', tx:-59 };   // KKM KBeacon Pro · MAC BC:57:29:03:ED:71 · iBeacon Minor 2736
 
 /* ---------- almacenamiento local (puede fallar) ---------- */
 const store = {
@@ -241,7 +241,7 @@ const S = {
   device:null, server:null, connected:false,
   alertChar:null, alerting:false,
   ema:null, history:[], lastSeenAt:0, lostSince:0, lost:false, farAlerted:false,
-  tx: store.get('tx', -59), n: 2.4,
+  tx: store.get('tx', TARGET.tx), n: 2.4,
   pos:null, posWatch:null, lastSeenPos:null,
   reconnectTimer:null, reconnectDelay:3000,
   demo:null, wake:null, audio:null,
@@ -356,7 +356,7 @@ document.addEventListener('visibilitychange', () => { if(document.visibilityStat
 /* ---------- señal ---------- */
 function onRssi(rssi, txPower){
   if(typeof txPower === 'number' && txPower < 0 && txPower > -100 && !store.get('txCalibrated', false)) S.tx = txPower;
-  S.ema = S.ema == null ? rssi : S.ema * 0.72 + rssi * 0.28;
+  S.ema = S.ema == null ? rssi : S.ema * 0.6 + rssi * 0.4;   // la placa emite cada ~2 s
   const now = Date.now();
   S.history.push({ t:now, v:S.ema });
   while(S.history.length && now - S.history[0].t > 62000) S.history.shift();
@@ -372,13 +372,13 @@ function seen(now){
 }
 
 /* ---------- Bluetooth ---------- */
-const OPTIONAL = [0x180F, 0x1802, 0x1803, 0x180A, 0xFFE0];
+const OPTIONAL = [0x180F, 0x1802, 0x1803, 0x180A, 0x2080];
 async function scan(){
   ensureAudio();
   try{ if('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); }catch(e){}
   let device;
-  try{ device = await bt.requestDevice({ acceptAllDevices:true, optionalServices:OPTIONAL }); }
-  catch(e){ if(e.name !== 'NotFoundError') setTrend('No se pudo abrir la búsqueda: ' + e.message); return; }
+  try{ device = await bt.requestDevice({ filters:[{ name:TARGET.name }], optionalServices:OPTIONAL }); }
+  catch(e){ if(e.name === 'NotFoundError') setTrend('No elegiste la placa. Si no aparecía en la lista, acércala y vuelve a intentar.'); else setTrend('No se pudo abrir la búsqueda: ' + e.message); return; }
   await attach(device);
 }
 async function attach(device){
@@ -387,8 +387,8 @@ async function attach(device){
   store.set('device', { id:device.id, name:device.name || '' });
   device.addEventListener('gattserverdisconnected', onDisconnected);
   device.addEventListener('advertisementreceived', ev => onRssi(ev.rssi, ev.txPower));
-  $('mName').textContent = device.name || 'Sin nombre';
-  $('mId').textContent = device.id;
+  $('mName').textContent = device.name || TARGET.name;
+  $('mId').textContent = 'Vinculada';
   startGeo();
   let signal = false;
   if(typeof device.watchAdvertisements === 'function'){
@@ -456,7 +456,7 @@ async function ring(){
 function startDemo(){
   ensureAudio(); stopAll(false);
   S.mode = 'demo'; S.lastSeenAt = Date.now(); S.lost = false;
-  $('mName').textContent = 'Placa simulada'; $('mId').textContent = 'demo'; $('mBat').textContent = '87 %';
+  $('mId').textContent = 'Simulación'; $('mBat').textContent = '87 %';
   startGeo();
   let target = -62, cur = -62, gap = 0;
   S.demo = setInterval(() => {
@@ -481,7 +481,7 @@ function stopAll(resetUi = true){
   S.mode = 'idle'; S.device = null; S.server = null; S.connected = false; S.alertChar = null; S.alerting = false;
   S.ema = null; S.history = []; S.lost = false; S.farAlerted = false;
   stopGeo();
-  if(resetUi){ ['mName','mId','mBat'].forEach(id => $(id).textContent = '—'); setTrend('Detenido. Pulsa «Buscar la placa» para empezar otra vez'); }
+  if(resetUi){ $('mId').textContent = 'Sin conectar'; $('mBat').textContent = '—'; setTrend('Detenido. Pulsa «Buscar la placa» para empezar otra vez'); }
   $('btnRing').textContent = 'Hacer sonar';
   setButtons(); updateWake();
 }
@@ -513,10 +513,10 @@ $('btnRing').addEventListener('click', ring);
   if(!bt || !saved || typeof bt.getDevices !== 'function') return;
   try{
     const list = await bt.getDevices();
-    const dev = list.find(d => d.id === saved.id);
+    const dev = list.find(d => d.id === saved.id) || list.find(d => d.name === TARGET.name);
     if(dev){
       const b = $('btnReconnect'); b.hidden = false;
-      b.textContent = 'Volver a conectar con ' + (dev.name || 'la última placa');
+      b.textContent = 'Volver a conectar con ' + (dev.name || TARGET.name);
       b.addEventListener('click', () => { ensureAudio(); b.hidden = true; attach(dev); });
     }
   }catch(e){}
@@ -526,6 +526,7 @@ $('btnRing').addEventListener('click', ring);
 function tick(){
   const now = Date.now();
   if(S.mode === 'gatt' && S.connected) seen(now);
+  if(S.device) $('mId').textContent = S.lost ? 'Fuera de alcance' : S.connected ? 'Conectada' : S.mode === 'signal' ? 'Escuchando señal' : 'Buscando…';
   const active = S.mode !== 'idle';
   if(active && !S.lost && now - S.lastSeenAt > settings.lostAfter * 1000){
     S.lost = true;
@@ -550,7 +551,7 @@ function tick(){
   $('vAgo').textContent = active ? fmtAgo(now - S.lastSeenAt) : '—';
 
   if(fresh && S.ema != null && S.history.length > 6){
-    const past = S.history.find(h => now - h.t < 5000) || S.history[0];
+    const past = S.history.find(h => now - h.t < 8000) || S.history[0];
     const diff = S.ema - past.v;
     setTrend(diff > 2.5 ? '↑ Te estás acercando' : diff < -2.5 ? '↓ Te estás alejando' : '· Distancia estable');
   } else if(S.lost){
@@ -641,3 +642,4 @@ renderLog(); setButtons(); tick(); requestAnimationFrame(drawRadar);
 </script>
 </body>
 </html>
+
