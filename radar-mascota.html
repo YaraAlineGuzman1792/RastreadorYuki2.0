@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#13232B">
+<title>Radar de Mascota</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: una sola columna para usar caminando con el teléfono; el radar manda, los controles abajo al alcance del pulgar. */
+:root{
+  --bg:#EEF2F3; --surface:#FFFFFF; --ink:#13232B; --muted:#5B6D75; --line:#D3DCDF;
+  --brass:#A87420; --brass-soft:#F3E6CB;
+  --near:#1F8A5B; --mid:#B97C0C; --far:#C2412D; --off:#7D8B91;
+  --display:'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --body:'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+  --mono:'JetBrains Mono', ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E171B; --surface:#16232A; --ink:#E6EEF0; --muted:#93A6AD; --line:#26363D;
+    --brass:#E0AE5A; --brass-soft:#3A2E17;
+    --near:#3CC48A; --mid:#E8B23E; --far:#F0705A; --off:#6E7E85;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E171B; --surface:#16232A; --ink:#E6EEF0; --muted:#93A6AD; --line:#26363D;
+  --brass:#E0AE5A; --brass-soft:#3A2E17;
+  --near:#3CC48A; --mid:#E8B23E; --far:#F0705A; --off:#6E7E85;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto;padding-block:20px 48px;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:center;gap:12px}
+.mark{width:40px;height:40px;flex:none;border-radius:50%;background:var(--brass-soft);display:grid;place-items:center}
+.mark svg{width:24px;height:24px}
+.titles{min-width:0;flex:1}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+h1{margin:0;font:800 26px/1.1 var(--display);text-wrap:balance}
+#petName{font:inherit;color:inherit;background:transparent;border:0;border-bottom:2px dashed var(--line);
+  padding:0;width:100%;max-width:12ch}
+#petName:focus{outline:none;border-bottom-color:var(--brass)}
+.notice{border:1px solid var(--far);border-radius:12px;padding:12px 14px;font-size:15px}
+.notice b{color:var(--far)}
+
+/* Radar */
+.radar{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:14px}
+.statusRow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-weight:700;font-size:15px;
+  background:color-mix(in srgb, var(--state) 14%, transparent);color:var(--state);border:1px solid color-mix(in srgb, var(--state) 40%, transparent)}
+.pill::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--state)}
+.pill.live::before{animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+.modeTag{font:500 12px var(--mono);color:var(--muted)}
+.canvasBox{position:relative;width:100%;max-width:100%;aspect-ratio:1/1}
+#radar{width:100%;height:100%;display:block}
+.readout{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.readout div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.readout .k{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.readout .v{font:500 22px/1.2 var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.trend{text-align:center;font-weight:700;font-size:17px;min-height:1.5em}
+#spark{width:100%;height:56px;display:block}
+.sparkCap{display:flex;justify-content:space-between;font:500 11px var(--mono);color:var(--muted)}
+
+/* Controles */
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{font:700 16px var(--body);border-radius:12px;padding:14px 12px;cursor:pointer;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);min-height:52px}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);grid-column:1/-1;font-size:18px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.full{grid-column:1/-1}
+
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+h2{margin:0;font:600 19px/1.2 var(--display)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.row label{flex:1;min-width:0}
+.row small{display:block;color:var(--muted);font-size:13px}
+select,input[type=number]{font:500 15px var(--mono);padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--brass)}
+
+.meta{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+.meta dt{color:var(--muted)}
+.meta dd{margin:0;font-family:var(--mono);overflow-wrap:anywhere;min-width:0}
+
+ol.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+ol.log li{display:grid;grid-template-columns:12px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+ol.log li:first-child{border-top:0}
+ol.log .dot{width:10px;height:10px;border-radius:50%;margin-top:6px;background:var(--c)}
+ol.log .what{font-weight:700}
+ol.log .when{font:500 13px var(--mono);color:var(--muted)}
+ol.log a{color:var(--brass);font-weight:700}
+.empty{color:var(--muted);font-size:15px;margin:0}
+.example{font-size:12px;color:var(--brass);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+
+details{border-top:1px solid var(--line);padding-top:10px}
+details:first-of-type{border-top:0;padding-top:0}
+summary{cursor:pointer;font-weight:700}
+details p,details li{color:var(--muted);font-size:15px;max-width:65ch}
+code{font-family:var(--mono);font-size:13px;background:var(--bg);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+footer{color:var(--muted);font-size:13px;text-align:center}
+@media (prefers-reduced-motion: reduce){.pill.live::before{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="mark" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--brass)" stroke-width="2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.6 4.6a10.5 10.5 0 0 0 0 14.8M19.4 4.6a10.5 10.5 0 0 1 0 14.8"/>
+    </svg>
+  </div>
+  <div class="titles">
+    <div class="eyebrow">Radar Bluetooth</div>
+    <h1>Buscando a <input id="petName" aria-label="Nombre de la mascota" value="mi mascota" maxlength="20"></h1>
+  </div>
+</header>
+
+<div id="noBt" class="notice" hidden>
+  <b>Este navegador no tiene Bluetooth web.</b> Abre esta página en Chrome o Edge (Android, Windows, Mac o ChromeOS). En iPhone usa el navegador gratuito <b>Bluefy</b>, porque Safari no lo admite. Mientras tanto puedes probar el modo demostración.
+</div>
+
+<main class="radar" aria-live="polite">
+  <div class="statusRow">
+    <span id="pill" class="pill" style="--state:var(--off)">Sin conectar</span>
+    <span id="modeTag" class="modeTag">—</span>
+  </div>
+  <div class="canvasBox"><canvas id="radar" aria-label="Radar de distancia aproximada"></canvas></div>
+  <div class="trend" id="trend">Pulsa «Buscar la placa» y elige tu dispositivo</div>
+  <div class="readout">
+    <div><span class="k">Distancia</span><span class="v" id="vDist">—</span></div>
+    <div><span class="k">Señal</span><span class="v" id="vRssi">—</span></div>
+    <div><span class="k">Visto hace</span><span class="v" id="vAgo">—</span></div>
+  </div>
+  <div>
+    <canvas id="spark" aria-label="Intensidad de la señal en el último minuto"></canvas>
+    <div class="sparkCap"><span>hace 60 s</span><span>intensidad de señal</span><span>ahora</span></div>
+  </div>
+</main>
+
+<div class="controls">
+  <button class="primary" id="btnScan">Buscar la placa</button>
+  <button id="btnReconnect" class="full" hidden>Volver a conectar</button>
+  <button id="btnRing" disabled>Hacer sonar</button>
+  <button id="btnCalib" disabled>Calibrar a 1 m</button>
+  <button id="btnDemo">Modo demostración</button>
+  <button id="btnStop" disabled>Detener</button>
+</div>
+
+<section class="card">
+  <h2>Placa conectada</h2>
+  <dl class="meta">
+    <dt>Nombre</dt><dd id="mName">—</dd>
+    <dt>ID</dt><dd id="mId">—</dd>
+    <dt>Batería</dt><dd id="mBat">—</dd>
+    <dt>Modo</dt><dd id="mMode">—</dd>
+  </dl>
+</section>
+
+<section class="card">
+  <h2>Alertas</h2>
+  <div class="row">
+    <label for="lostAfter">Avisar si no la detecto durante<small>Pocos segundos dan falsas alarmas; muchos tardan en avisar.</small></label>
+    <select id="lostAfter">
+      <option value="10">10 s</option><option value="20" selected>20 s</option><option value="45">45 s</option><option value="90">90 s</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="farAlert">Avisar también si se aleja más de<small>Solo en modo señal, que mide distancia.</small></label>
+    <select id="farAlert">
+      <option value="0">No avisar</option><option value="10">10 m</option><option value="20" selected>20 m</option><option value="40">40 m</option>
+    </select>
+  </div>
+  <div class="row"><label for="sound">Sonido y vibración</label><input type="checkbox" id="sound" checked></div>
+  <div class="row"><label for="awake">Mantener la pantalla encendida<small>Si la pantalla se apaga, el navegador deja de escuchar la placa.</small></label><input type="checkbox" id="awake" checked></div>
+</section>
+
+<section class="card">
+  <div class="row"><h2>Dónde la vi</h2><button id="btnClear" style="min-height:40px;padding:8px 12px;font-size:14px">Borrar</button></div>
+  <ol class="log" id="log"></ol>
+</section>
+
+<section class="card">
+  <h2>Ayuda</h2>
+  <details>
+    <summary>¿Cómo reconozco mi placa en la lista?</summary>
+    <ol>
+      <li>Pon la placa pegada al teléfono y aleja otros aparatos Bluetooth (audífonos, reloj).</li>
+      <li>Al pulsar «Buscar la placa», Chrome muestra los dispositivos cercanos. Puede aparecer con un nombre genérico (iTAG, Beacon, MiniBeacon) o como «Dispositivo desconocido».</li>
+      <li>Si dudas, abre la lista lejos de la placa y luego cerca: el que aparece al acercarte es el tuyo.</li>
+    </ol>
+  </details>
+  <details>
+    <summary>No me muestra la distancia, solo «en alcance»</summary>
+    <p>Medir la intensidad de la señal desde una página web todavía es una función experimental de Chrome. Para activarla:</p>
+    <ol>
+      <li>Escribe <code>chrome://flags/#enable-experimental-web-platform-features</code> en la barra de direcciones.</li>
+      <li>Cámbialo a <b>Enabled</b> y reinicia Chrome.</li>
+      <li>Vuelve a buscar la placa. El modo dirá «señal».</li>
+    </ol>
+    <p>Sin esa opción la app se conecta a la placa y avisa cuando se pierde la conexión. Funciona solo si tu placa acepta conexiones; muchas balizas sí lo hacen.</p>
+  </details>
+  <details>
+    <summary>¿Qué puede y qué no puede hacer?</summary>
+    <p>La placa es una baliza Bluetooth de corto alcance (unos 80–90 m en campo abierto, mucho menos entre paredes). Esta app solo la detecta cuando tu teléfono está cerca. Mide distancia, no dirección: camina y fíjate si el indicador dice que te acercas o te alejas.</p>
+    <p>Cada vez que la pierde o la vuelve a encontrar, guarda la hora y la ubicación de tu teléfono en ese momento, para que sepas por dónde andaba. Todo se guarda solo en este navegador.</p>
+  </details>
+  <details>
+    <summary>¿Por qué «Hacer sonar» no funciona?</summary>
+    <p>Solo funciona si la placa tiene zumbador y el servicio estándar de alerta Bluetooth (como las etiquetas tipo iTAG). Muchas balizas para mascotas no lo tienen.</p>
+  </details>
+</section>
+
+<footer>Funciona sin la app de la marca y sin internet. Los datos no salen de tu teléfono.</footer>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const bt = navigator.bluetooth;
+
+/* ---------- almacenamiento local (puede fallar) ---------- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('radarMascota.'+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('radarMascota.'+k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------- estado ---------- */
+const S = {
+  mode:'idle',          // idle | signal | gatt | demo
+  device:null, server:null, connected:false,
+  alertChar:null, alerting:false,
+  ema:null, history:[], lastSeenAt:0, lostSince:0, lost:false, farAlerted:false,
+  tx: store.get('tx', -59), n: 2.4,
+  pos:null, posWatch:null, lastSeenPos:null,
+  reconnectTimer:null, reconnectDelay:3000,
+  demo:null, wake:null, audio:null,
+  log: store.get('log', null)
+};
+
+const settings = {
+  get lostAfter(){ return +$('lostAfter').value; },
+  get farAlert(){ return +$('farAlert').value; },
+  get sound(){ return $('sound').checked; },
+  get awake(){ return $('awake').checked; }
+};
+['lostAfter','farAlert'].forEach(id => { $(id).value = store.get(id, $(id).value); $(id).addEventListener('change', e => store.set(id, e.target.value)); });
+['sound','awake'].forEach(id => { $(id).checked = store.get(id, $(id).checked); $(id).addEventListener('change', e => { store.set(id, e.target.checked); if(id==='awake') updateWake(); }); });
+$('petName').value = store.get('pet', 'mi mascota');
+$('petName').addEventListener('input', e => store.set('pet', e.target.value));
+const pet = () => ($('petName').value.trim() || 'tu mascota');
+
+if(!bt){ $('noBt').hidden = false; $('btnScan').disabled = true; }
+
+/* ---------- utilidades ---------- */
+const dist = rssi => Math.pow(10, (S.tx - rssi) / (10 * S.n));
+const fmtDist = d => d < 1 ? '< 1 m' : d < 10 ? '≈ ' + d.toFixed(1) + ' m' : d > 90 ? '> 90 m' : '≈ ' + Math.round(d) + ' m';
+const fmtAgo = ms => { const s = Math.floor(ms/1000); return s < 2 ? 'ahora' : s < 60 ? s + ' s' : Math.floor(s/60) + ' min'; };
+const fmtTime = t => new Date(t).toLocaleString('es-GT', { hour:'2-digit', minute:'2-digit', second:'2-digit', day:'numeric', month:'short' });
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let colors = {};
+function readColors(){ ['--ink','--muted','--line','--brass','--near','--mid','--far','--off','--surface'].forEach(k => colors[k] = css(k)); }
+readColors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+new MutationObserver(readColors).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- ubicación del teléfono ---------- */
+function startGeo(){
+  if(!navigator.geolocation || S.posWatch != null) return;
+  try{
+    S.posWatch = navigator.geolocation.watchPosition(
+      p => { S.pos = { lat:p.coords.latitude, lng:p.coords.longitude, acc:Math.round(p.coords.accuracy) }; },
+      () => {}, { enableHighAccuracy:true, maximumAge:15000, timeout:20000 });
+  }catch(e){}
+}
+function stopGeo(){ if(S.posWatch != null){ try{ navigator.geolocation.clearWatch(S.posWatch); }catch(e){} S.posWatch = null; } }
+
+/* ---------- bitácora ---------- */
+const LOG_KIND = {
+  lost:  { label: () => `Se perdió la señal de ${pet()}`, c:'--far' },
+  found: { label: () => `${pet()} volvió a estar en alcance`, c:'--near' },
+  far:   { label: () => `${pet()} se alejó más de ${settings.farAlert} m`, c:'--mid' },
+  conn:  { label: () => `Conectada a la placa`, c:'--brass' }
+};
+function addLog(kind, pos, extra){
+  if(S.log === null) S.log = [];
+  S.log.unshift({ kind, t:Date.now(), pos: pos || null, extra: extra || '' });
+  S.log = S.log.slice(0, 60);
+  store.set('log', S.log);
+  renderLog();
+}
+function renderLog(){
+  const ol = $('log'); ol.innerHTML = '';
+  let items = S.log, example = false;
+  if(S.log === null){   // primera vez: ejemplo marcado
+    example = true;
+    const now = Date.now();
+    items = [
+      { kind:'found', t:now - 3*60000, pos:{ lat:15.7278, lng:-88.5944, acc:12 } },
+      { kind:'lost',  t:now - 9*60000, pos:{ lat:15.7270, lng:-88.5950, acc:15 } }
+    ];
+  }
+  if(!items.length){ ol.innerHTML = '<li style="display:block;border:0"><p class="empty">Aún no hay registros. Cuando la señal se pierda o vuelva, aquí verás la hora y dónde estabas.</p></li>'; return; }
+  if(example){ const li = document.createElement('li'); li.style.display='block'; li.style.borderTop='0'; li.innerHTML = '<span class="example">Ejemplo · se reemplaza con tus datos</span>'; ol.appendChild(li); }
+  items.forEach(it => {
+    const k = LOG_KIND[it.kind] || LOG_KIND.conn;
+    const li = document.createElement('li');
+    li.style.setProperty('--c', `var(${k.c})`);
+    const where = it.pos
+      ? `<a href="https://www.google.com/maps?q=${it.pos.lat},${it.pos.lng}" target="_blank" rel="noopener">Ver en el mapa</a> · <span class="when">±${it.pos.acc} m</span>`
+      : '<span class="when">sin ubicación del teléfono</span>';
+    li.innerHTML = `<span class="dot"></span><div><div class="what"></div><div class="when">${fmtTime(it.t)}${it.extra ? ' · ' + it.extra : ''}</div><div>${where}</div></div>`;
+    li.querySelector('.what').textContent = k.label();
+    ol.appendChild(li);
+  });
+}
+$('btnClear').addEventListener('click', () => { S.log = []; store.set('log', S.log); renderLog(); });
+
+/* ---------- alarma ---------- */
+function ensureAudio(){ if(!S.audio){ try{ S.audio = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){} } if(S.audio && S.audio.state === 'suspended') S.audio.resume(); }
+function beep(times){
+  if(!S.audio) return;
+  const t0 = S.audio.currentTime;
+  for(let i=0;i<times;i++){
+    const o = S.audio.createOscillator(), g = S.audio.createGain();
+    o.type = 'square'; o.frequency.value = 1320;
+    g.gain.setValueAtTime(0.0001, t0 + i*0.35); g.gain.exponentialRampToValueAtTime(0.25, t0 + i*0.35 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i*0.35 + 0.22);
+    o.connect(g).connect(S.audio.destination); o.start(t0 + i*0.35); o.stop(t0 + i*0.35 + 0.25);
+  }
+}
+function alarm(title, body){
+  if(settings.sound){ beep(4); try{ navigator.vibrate && navigator.vibrate([400,150,400,150,600]); }catch(e){} }
+  try{ if('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, tag:'radar-mascota' }); }catch(e){}
+}
+
+/* ---------- pantalla encendida ---------- */
+async function updateWake(){
+  const active = S.mode !== 'idle';
+  if(active && settings.awake && 'wakeLock' in navigator && !S.wake){
+    try{ S.wake = await navigator.wakeLock.request('screen'); S.wake.addEventListener('release', () => S.wake = null); }catch(e){}
+  } else if((!active || !settings.awake) && S.wake){ try{ await S.wake.release(); }catch(e){} S.wake = null; }
+}
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') updateWake(); });
+
+/* ---------- señal ---------- */
+function onRssi(rssi, txPower){
+  if(typeof txPower === 'number' && txPower < 0 && txPower > -100 && !store.get('txCalibrated', false)) S.tx = txPower;
+  S.ema = S.ema == null ? rssi : S.ema * 0.72 + rssi * 0.28;
+  const now = Date.now();
+  S.history.push({ t:now, v:S.ema });
+  while(S.history.length && now - S.history[0].t > 62000) S.history.shift();
+  seen(now);
+  const d = dist(S.ema);
+  if(settings.farAlert && d > settings.farAlert && !S.farAlerted){
+    S.farAlerted = true; addLog('far', S.pos, fmtDist(d)); alarm(`${pet()} se está alejando`, `Distancia aproximada: ${fmtDist(d)}`);
+  } else if(settings.farAlert && d < settings.farAlert * 0.7) S.farAlerted = false;
+}
+function seen(now){
+  S.lastSeenAt = now; S.lastSeenPos = S.pos;
+  if(S.lost){ S.lost = false; addLog('found', S.pos); if(settings.sound) beep(1); }
+}
+
+/* ---------- Bluetooth ---------- */
+const OPTIONAL = [0x180F, 0x1802, 0x1803, 0x180A, 0xFFE0];
+async function scan(){
+  ensureAudio();
+  try{ if('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); }catch(e){}
+  let device;
+  try{ device = await bt.requestDevice({ acceptAllDevices:true, optionalServices:OPTIONAL }); }
+  catch(e){ if(e.name !== 'NotFoundError') setTrend('No se pudo abrir la búsqueda: ' + e.message); return; }
+  await attach(device);
+}
+async function attach(device){
+  stopAll(false);
+  S.device = device;
+  store.set('device', { id:device.id, name:device.name || '' });
+  device.addEventListener('gattserverdisconnected', onDisconnected);
+  device.addEventListener('advertisementreceived', ev => onRssi(ev.rssi, ev.txPower));
+  $('mName').textContent = device.name || 'Sin nombre';
+  $('mId').textContent = device.id;
+  startGeo();
+  let signal = false;
+  if(typeof device.watchAdvertisements === 'function'){
+    try{ await device.watchAdvertisements(); signal = true; }catch(e){ signal = false; }
+  }
+  S.mode = signal ? 'signal' : 'gatt';
+  S.lastSeenAt = Date.now(); S.lost = false;
+  setButtons();
+  updateWake();
+  if(signal){ setTrend('Escuchando la señal… acércate o aléjate para ver el cambio'); connectGatt(true); }
+  else { setTrend('Conectando con la placa…'); await connectGatt(false); }
+}
+async function connectGatt(quiet){
+  if(!S.device || !S.device.gatt) return;
+  try{
+    S.server = await S.device.gatt.connect();
+    S.connected = true; S.reconnectDelay = 3000;
+    if(S.mode === 'gatt'){ seen(Date.now()); setTrend(`${pet()} está en alcance (menos de ~80 m)`); }
+    addLog('conn', S.pos, S.mode === 'signal' ? 'modo señal' : 'modo conexión');
+    readBattery(); findAlert();
+  }catch(e){
+    S.connected = false;
+    if(S.mode === 'gatt'){
+      if(!quiet) setTrend('La placa no acepta conexión o está fuera de alcance. Reintentando…');
+      scheduleReconnect();
+    }
+  }
+  setButtons();
+}
+function onDisconnected(){
+  S.connected = false; S.alertChar = null; setButtons();
+  if(S.mode === 'gatt') scheduleReconnect();
+}
+function scheduleReconnect(){
+  clearTimeout(S.reconnectTimer);
+  if(S.mode !== 'gatt') return;
+  S.reconnectTimer = setTimeout(() => connectGatt(true), S.reconnectDelay);
+  S.reconnectDelay = Math.min(S.reconnectDelay * 1.5, 20000);
+}
+async function readBattery(){
+  try{
+    const ch = await (await S.server.getPrimaryService(0x180F)).getCharacteristic(0x2A19);
+    const v = await ch.readValue(); $('mBat').textContent = v.getUint8(0) + ' %';
+  }catch(e){ $('mBat').textContent = 'No informa'; }
+}
+async function findAlert(){
+  try{ S.alertChar = await (await S.server.getPrimaryService(0x1802)).getCharacteristic(0x2A06); }
+  catch(e){ S.alertChar = null; }
+  setButtons();
+}
+async function ring(){
+  ensureAudio();
+  if(!S.connected){ await connectGatt(false); if(!S.alertChar) { setTrend('No pude conectar para hacerla sonar'); return; } }
+  if(!S.alertChar){ setTrend('Esta placa no tiene zumbador o no expone la alerta estándar'); return; }
+  try{
+    S.alerting = !S.alerting;
+    await S.alertChar.writeValueWithoutResponse(new Uint8Array([S.alerting ? 2 : 0]));
+  }catch(e){
+    try{ await S.alertChar.writeValue(new Uint8Array([S.alerting ? 2 : 0])); }catch(e2){ S.alerting = false; setTrend('No se pudo enviar la alerta: ' + e2.message); }
+  }
+  $('btnRing').textContent = S.alerting ? 'Silenciar' : 'Hacer sonar';
+}
+
+/* ---------- demostración ---------- */
+function startDemo(){
+  ensureAudio(); stopAll(false);
+  S.mode = 'demo'; S.lastSeenAt = Date.now(); S.lost = false;
+  $('mName').textContent = 'Placa simulada'; $('mId').textContent = 'demo'; $('mBat').textContent = '87 %';
+  startGeo();
+  let target = -62, cur = -62, gap = 0;
+  S.demo = setInterval(() => {
+    if(Math.random() < 0.03) target = -48 - Math.random() * 45;
+    if(gap > 0){ gap--; return; }
+    if(Math.random() < 0.006) { gap = 25; return; }   // a veces desaparece
+    cur += (target - cur) * 0.08 + (Math.random() - 0.5) * 5;
+    onRssi(Math.round(cur));
+  }, 400);
+  setTrend('Simulación: así se ve cuando la placa se mueve');
+  setButtons(); updateWake();
+}
+
+/* ---------- detener ---------- */
+function stopAll(resetUi = true){
+  clearInterval(S.demo); S.demo = null;
+  clearTimeout(S.reconnectTimer);
+  if(S.device){
+    try{ S.device.unwatchAdvertisements && S.device.unwatchAdvertisements(); }catch(e){}
+    try{ S.device.gatt && S.device.gatt.connected && S.device.gatt.disconnect(); }catch(e){}
+  }
+  S.mode = 'idle'; S.device = null; S.server = null; S.connected = false; S.alertChar = null; S.alerting = false;
+  S.ema = null; S.history = []; S.lost = false; S.farAlerted = false;
+  stopGeo();
+  if(resetUi){ ['mName','mId','mBat'].forEach(id => $(id).textContent = '—'); setTrend('Detenido. Pulsa «Buscar la placa» para empezar otra vez'); }
+  $('btnRing').textContent = 'Hacer sonar';
+  setButtons(); updateWake();
+}
+
+/* ---------- interfaz ---------- */
+function setTrend(t){ $('trend').textContent = t; }
+function setButtons(){
+  const active = S.mode !== 'idle';
+  $('btnStop').disabled = !active;
+  $('btnRing').disabled = !(S.mode === 'signal' || S.mode === 'gatt');
+  $('btnCalib').disabled = !(S.ema != null && (S.mode === 'signal' || S.mode === 'demo'));
+  $('btnDemo').textContent = S.mode === 'demo' ? 'Reiniciar demo' : 'Modo demostración';
+  const labels = { idle:'—', signal:'señal · mide distancia', gatt:'conexión · en alcance sí/no', demo:'demostración' };
+  $('modeTag').textContent = labels[S.mode]; $('mMode').textContent = labels[S.mode];
+}
+$('btnCalib').addEventListener('click', () => {
+  if(S.ema == null) return;
+  S.tx = Math.round(S.ema); store.set('tx', S.tx); store.set('txCalibrated', true);
+  setTrend(`Calibrado: a 1 m la señal es ${S.tx} dBm`);
+});
+$('btnScan').addEventListener('click', scan);
+$('btnDemo').addEventListener('click', startDemo);
+$('btnStop').addEventListener('click', () => stopAll(true));
+$('btnRing').addEventListener('click', ring);
+
+/* volver a una placa ya autorizada (si Chrome lo permite) */
+(async () => {
+  const saved = store.get('device', null);
+  if(!bt || !saved || typeof bt.getDevices !== 'function') return;
+  try{
+    const list = await bt.getDevices();
+    const dev = list.find(d => d.id === saved.id);
+    if(dev){
+      const b = $('btnReconnect'); b.hidden = false;
+      b.textContent = 'Volver a conectar con ' + (dev.name || 'la última placa');
+      b.addEventListener('click', () => { ensureAudio(); b.hidden = true; attach(dev); });
+    }
+  }catch(e){}
+})();
+
+/* ---------- ciclo de 1 s: pérdida, tendencia, lecturas ---------- */
+function tick(){
+  const now = Date.now();
+  if(S.mode === 'gatt' && S.connected) seen(now);
+  const active = S.mode !== 'idle';
+  if(active && !S.lost && now - S.lastSeenAt > settings.lostAfter * 1000){
+    S.lost = true;
+    addLog('lost', S.lastSeenPos || S.pos, 'última señal ' + fmtTime(S.lastSeenAt).split(', ').pop());
+    alarm(`Perdí la señal de ${pet()}`, 'Revisa «Dónde la vi» para saber dónde estabas la última vez.');
+  }
+  let state = { t:'Sin conectar', c:'--off', live:false };
+  if(active){
+    if(S.lost) state = { t:'Fuera de alcance', c:'--far', live:true };
+    else if(S.mode === 'gatt') state = S.connected ? { t:'En alcance', c:'--near', live:true } : { t:'Buscando…', c:'--mid', live:true };
+    else if(S.ema == null) state = { t:'Escuchando…', c:'--mid', live:true };
+    else {
+      const d = dist(S.ema);
+      state = d < 3 ? { t:'Muy cerca', c:'--near', live:true } : d < 15 ? { t:'Cerca', c:'--mid', live:true } : { t:'Lejos', c:'--far', live:true };
+    }
+  }
+  const pill = $('pill'); pill.textContent = state.t; pill.style.setProperty('--state', `var(${state.c})`); pill.classList.toggle('live', state.live);
+
+  const fresh = active && !S.lost;
+  $('vDist').textContent = fresh && S.ema != null ? fmtDist(dist(S.ema)) : (S.mode === 'gatt' && fresh ? '< 80 m' : '—');
+  $('vRssi').textContent = fresh && S.ema != null ? Math.round(S.ema) + ' dBm' : '—';
+  $('vAgo').textContent = active ? fmtAgo(now - S.lastSeenAt) : '—';
+
+  if(fresh && S.ema != null && S.history.length > 6){
+    const past = S.history.find(h => now - h.t < 5000) || S.history[0];
+    const diff = S.ema - past.v;
+    setTrend(diff > 2.5 ? '↑ Te estás acercando' : diff < -2.5 ? '↓ Te estás alejando' : '· Distancia estable');
+  } else if(S.lost){
+    setTrend(`No detecto a ${pet()}. Camina hacia donde la viste por última vez.`);
+  }
+  $('btnCalib').disabled = !(S.ema != null && fresh && (S.mode === 'signal' || S.mode === 'demo'));
+  drawSpark();
+}
+setInterval(tick, 1000);
+
+/* ---------- dibujo ---------- */
+function fit(c){
+  const r = c.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if(c.width !== w || c.height !== h){ c.width = w; c.height = h; }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return { ctx, w:r.width, h:r.height };
+}
+const MAXD = 90;
+const rOf = (d, R) => R * Math.log10(1 + Math.min(d, MAXD)) / Math.log10(1 + MAXD);
+let sweep = 0;
+function drawRadar(){
+  const { ctx, w, h } = fit($('radar'));
+  const cx = w/2, cy = h/2, R = Math.min(w, h)/2 - 18;
+  ctx.clearRect(0,0,w,h);
+  ctx.font = '500 11px ' + css('--mono');
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  [1, 5, 15, 40, 90].forEach(m => {
+    const r = rOf(m, R);
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = colors['--line']; ctx.lineWidth = 1; ctx.setLineDash(m === 90 ? [] : [3,5]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = colors['--muted']; ctx.fillText(m + ' m', cx + r * 0.71 + 4, cy - r * 0.71 - 6);
+  });
+  const active = S.mode !== 'idle';
+  if(active && !reduced){
+    sweep = (sweep + 0.025) % (Math.PI*2);
+    const grad = ctx.createConicGradient ? ctx.createConicGradient(sweep - 0.9, cx, cy) : null;
+    if(grad){
+      grad.addColorStop(0, 'transparent'); grad.addColorStop(0.14, hexA(colors['--brass'], 0.28)); grad.addColorStop(0.1401, 'transparent'); grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  // banda de distancia estimada (es un anillo, no un punto: no sabemos la dirección)
+  if(active && !S.lost){
+    let r, band, col;
+    if(S.ema != null && S.mode !== 'gatt'){
+      const d = dist(S.ema); r = rOf(d, R); band = Math.max(6, r * 0.18);
+      col = d < 3 ? colors['--near'] : d < 15 ? colors['--mid'] : colors['--far'];
+    } else if(S.mode === 'gatt' && S.connected){ r = R * 0.55; band = R * 0.45; col = colors['--near']; }
+    if(r){
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.strokeStyle = hexA(col, 0.22); ctx.lineWidth = band*2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.stroke();
+    }
+  } else if(S.lost){
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.strokeStyle = colors['--far']; ctx.lineWidth = 3; ctx.setLineDash([8,8]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // tú, en el centro
+  ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI*2); ctx.fillStyle = colors['--ink']; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI*2); ctx.fillStyle = colors['--surface']; ctx.fill();
+  ctx.fillStyle = colors['--muted']; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = '700 12px ' + css('--body');
+  ctx.fillText('tú', cx, cy + 13);
+  requestAnimationFrame(drawRadar);
+}
+function drawSpark(){
+  const { ctx, w, h } = fit($('spark'));
+  ctx.clearRect(0,0,w,h);
+  const lo = -100, hi = -35, y = v => h - 4 - (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * (h - 8);
+  ctx.strokeStyle = colors['--line']; ctx.lineWidth = 1;
+  [-90, -70, -50].forEach(v => { ctx.beginPath(); ctx.moveTo(0, y(v)); ctx.lineTo(w, y(v)); ctx.stroke(); });
+  if(S.history.length < 2) return;
+  const now = Date.now(), x = t => w - (now - t) / 60000 * w;
+  ctx.beginPath(); S.history.forEach((p, i) => i ? ctx.lineTo(x(p.t), y(p.v)) : ctx.moveTo(x(p.t), y(p.v)));
+  ctx.lineTo(x(S.history[S.history.length-1].t), h); ctx.lineTo(x(S.history[0].t), h); ctx.closePath();
+  ctx.fillStyle = hexA(colors['--brass'], 0.15); ctx.fill();
+  ctx.beginPath(); S.history.forEach((p, i) => i ? ctx.lineTo(x(p.t), y(p.v)) : ctx.moveTo(x(p.t), y(p.v)));
+  ctx.strokeStyle = colors['--brass']; ctx.lineWidth = 2; ctx.stroke();
+  const last = S.history[S.history.length-1];
+  ctx.beginPath(); ctx.arc(x(last.t), y(last.v), 3.5, 0, Math.PI*2); ctx.fillStyle = colors['--brass']; ctx.fill();
+}
+function hexA(hex, a){
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if(!m) return hex;
+  const n = parseInt(m[1], 16); return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`;
+}
+
+renderLog(); setButtons(); tick(); requestAnimationFrame(drawRadar);
+})();
+</script>
+</body>
+</html>
